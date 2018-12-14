@@ -1,3 +1,503 @@
+# Introduction
+
+- **general-purpose**
+- **strongly typed**
+- **garbage-collected**
+- **concurrent**
+
+# Notation
+Extended Backus-Naur Form (EBNF):
+
+```
+Production  = production_name "=" [ Expression ] "." .
+Expression  = Alternative { "|" Alternative } .
+Alternative = Term { Term } .
+Term        = production_name | token [ "…" token ] | Group | Option | Repetition .
+Group       = "(" Expression ")" .
+Option      = "[" Expression "]" .
+Repetition  = "{" Expression "}" .
+```
+
+Productions are expressions constructed from terms and the following operatiors, in increasing precedence:
+```
+|   alternation
+()  grouping
+[]  option (0 or 1 times)
+{}  repetition (0 to n times)
+```
+
+- Lower-case production names are sued to identify lexical tokens,i.e., ```production_name```.
+- Non-terminals are in CamelCase.
+- Lexical tokens are enclosed in quotes, "" or ``.
+# Source code representation
+UTF-8
+...
+
+## Characters
+```
+newline        = /* the Unicode code point U+000A */ .
+unicode_char   = /* an arbitrary Unicode code point except newline */ .
+unicode_letter = /* a Unicode code point classified as "Letter" */ .
+unicode_digit  = /* a Unicode code point classified as "Number, decimal digit" */ .
+```
+
+## Letters and digits
+```
+letter        = unicode_letter | "_" .
+decimal_digit = "0" … "9" .
+octal_digit   = "0" … "7" .
+hex_digit     = "0" … "9" | "A" … "F" | "a" … "f" .
+```
+
+# Lexcial elements
+## Comments
+- //
+- /* xxxxx */
+
+## Tokens
+1. identifiers
+2. keywords
+3. operators and punctuation
+4. literals
+
+A newline or end of file may trigger the insertion of a semicolon.
+
+## Semicolons
+The formal grammar uses semicolons ";" as terminators in a number of productions. 
+
+Go programs may omit most of these semicolons using the following two rules: 
+1. When the input is broken into tokens, a semicolon is automatically inserted into the token stream immediately after a line's final token if that token is
+    - an identifier
+    - an integer, floating-point, imaginary, rune, or string literal
+    - one of the keywords break, continue, fallthrough, or return
+    - one of the operators and punctuation ++, --, ), ], or }
+2. To allow complex statements to occupy a single line, a semicolon may be omitted before a closing ")" or "}".
+
+## Identifiers
+Identifiers name program entities such as variables and **types**.
+```
+identifier = letter { letter | unicode_digit }
+```
+Here pay attention to the EBNF: ```Repetition  = "{" Expression "}" .```
+```
+a
+_x9
+ThisVariableIsExported
+αβ
+```
+
+## Keywords
+```
+break        default      func         interface    select
+case         defer        go           map          struct
+chan         else         goto         package      switch
+const        fallthrough  if           range        type
+continue     for          import       return       var
+```
+## Operators and puncuation
+```
++    &     +=    &=     &&    ==    !=    (    )
+-    |     -=    |=     ||    <     <=    [    ]
+*    ^     *=    ^=     <-    >     >=    {    }
+/    <<    /=    <<=    ++    =     :=    ,    ;
+%    >>    %=    >>=    --    !     ...   .    :
+     &^          &^=
+```
+
+## Integer literals
+```
+int_lit     = decimal_lit | octal_lit | hex_lit .
+decimal_lit = ( "1" … "9" ) { decimal_digit } .
+octal_lit   = "0" { octal_digit } .
+hex_lit     = "0" ( "x" | "X" ) hex_digit { hex_digit } .
+```
+```
+42
+0600
+0xBadFace
+170141183460469231731687303715884105727
+```
+
+## Floating-point literals
+```
+float_lit = decimals "." [ decimals ] [ exponent ] |
+            decimals exponent |
+            "." decimals [ exponent ] .
+decimals  = decimal_digit { decimal_digit } .
+exponent  = ( "e" | "E" ) [ "+" | "-" ] decimals .
+```
+```
+0.
+72.40
+072.40  // == 72.40
+2.71828
+1.e+0
+6.67428e-11
+1E6
+.25
+.12345E+5
+```
+
+## Imaginary literals
+```
+imaginary_lit = (decimals | float_lit) "i" .
+```
+
+## Rune literals
+**rune constant**
+```
+rune_lit         = "'" ( unicode_value | byte_value ) "'" .
+unicode_value    = unicode_char | little_u_value | big_u_value | escaped_char .
+byte_value       = octal_byte_value | hex_byte_value .
+octal_byte_value = `\` octal_digit octal_digit octal_digit .
+hex_byte_value   = `\` "x" hex_digit hex_digit .
+little_u_value   = `\` "u" hex_digit hex_digit hex_digit hex_digit .
+big_u_value      = `\` "U" hex_digit hex_digit hex_digit hex_digit
+                           hex_digit hex_digit hex_digit hex_digit .
+escaped_char     = `\` ( "a" | "b" | "f" | "n" | "r" | "t" | "v" | `\` | "'" | `"` ) .
+```
+```
+'a'
+'ä'
+'本'
+'\t'
+'\000'
+'\007'
+'\377'
+'\x07'
+'\xff'
+'\u12e4'
+'\U00101234'
+'\''         // rune literal containing single quote character
+'aa'         // illegal: too many characters
+'\xa'        // illegal: too few hexadecimal digits
+'\0'         // illegal: too few octal digits
+'\uDFFF'     // illegal: surrogate half
+'\U00110000' // illegal: invalid Unicode code point
+```
+
+## String literals
+```
+string_lit             = raw_string_lit | interpreted_string_lit .
+raw_string_lit         = "`" { unicode_char | newline } "`" .
+interpreted_string_lit = `"` { unicode_value | byte_value } `"` .
+```
+```
+`abc`                // same as "abc"
+`\n
+\n`                  // same as "\\n\n\\n"
+"\n"
+"\""                 // same as `"`
+"Hello, world!\n"
+"日本語"
+"\u65e5本\U00008a9e"
+"\xff\u00FF"
+"\uD800"             // illegal: surrogate half
+"\U00110000"         // illegal: invalid Unicode code point
+```
+
+These examples all represent the same string:
+```
+"日本語"                                 // UTF-8 input text
+`日本語`                                 // UTF-8 input text as a raw literal
+"\u65e5\u672c\u8a9e"                    // the explicit Unicode code points
+"\U000065e5\U0000672c\U00008a9e"        // the explicit Unicode code points
+"\xe6\x97\xa5\xe6\x9c\xac\xe8\xaa\x9e"  // the explicit UTF-8 bytes
+```
+
+# Constants
+- boolean constants
+- rune constants
+- integer constants
+- floating-point constants
+- complex constants
+- string constants
+
+*numeric constants*
+- rune constants
+- integer constants
+- floating-point constants
+- complex constants
+
+A constant value is represented by 
+- a rune, integer, floating-point, imaginary, or string literal, 
+- an identifier denoting a constant, 
+- a constant expression, 
+- a conversion with a result that is a constant, or 
+- the result value of some built-in functions such as unsafe.Sizeof applied to any value, cap or len applied to some expressions, real and imag applied to a complex constant and complex applied to numeric constants. 
+- The boolean truth values are represented by the predeclared constants ```true``` and ```false```
+
+Numeric constants represent exact values of arbitrary precision and do not overflow.
+
+Constants may be typed or untyped. 
+untyped:
+- literal constants
+- true, false, iota
+- certain constant expressions containing only untyped constant operands 
+
+given type:
+- explicitly
+    - a constant declaration or conversion
+    - used in a variable declaration or an assignment 
+    - as an operand in an expression
+- implicitly
+    - An untyped constant has a default type which is the type to which the constant is implicitly converted in contexts where a typed value is required, for instance, in a short variable declaration such as i := 0
+
+# Variables
+A variable is a **storage location** for holding a **value**.
+The set of permissible values is determined by the variable's **type**.
+
+- A variable declaration reserves storage for a **named** variable
+- the signature of a function declaration or function literal reserves storage for funtion parameters and results.
+- Calling the built-in function new or taking the address of a composite literal allocates storage for a variable at run time. Such an anonymous variable is referred to via a (possibly implicit) pointer indirection. 
+
+Structured variables of array, slice, and struct types have elements and fields that may be addressed individually. Each such element acts like a variable. 
+
+The static type (or just type) of a variable is 
+- the type given in its declaration, 
+- the type provided in the new call or composite literal, or 
+- the type of an element of a structured variable
+
+Variables of interface type also have a distinct *dynamic type*, which is the concrete type of the value assigned to the variable at run time (unless the value is the predeclared identifier nil, which has no type). The dynamic type may vary during execution but values stored in interface variables are always assignable to the static type of the variable. ??
+```
+var x interface{}  // x is nil and has static type interface{}
+var v *T           // v has value nil, static type *T
+x = 42             // x has value 42 and dynamic type int
+x = v              // x has value (*T)(nil) and dynamic type *T
+```
+A variable's value is **retrieved by referring** to the variable in an expression; it is the most recent value assigned to the variable. If a variable has not yet been assigned a value, its value is the zero value for its type. 
+
+# Types
+A type determines **a set of values** together with **operations** and **methods** specific to those values.
+```
+Type      = TypeName | TypeLit | "(" Type ")" .
+TypeName  = identifier | QualifiedIdent .
+TypeLit   = ArrayType | StructType | PointerType | FunctionType | InterfaceType |
+	    SliceType | MapType | ChannelType .
+```
+The language predeclares certain type names. Others are introduced with type declarations. Composite types—array, struct, pointer, function, interface, slice, map, and channel types—may be constructed using type literals. 
+
+Each type T has an underlying type: If T is one of the predeclared boolean, numeric, or string types, or a type literal, the corresponding underlying type is T itself. Otherwise, T's underlying type is the underlying type of the type to which T refers in its type declaration. 
+
+```
+type (
+	A1 = string
+	A2 = A1
+)
+
+type (
+	B1 string
+	B2 B1
+	B3 []B1
+	B4 B3
+)
+```
+The underlying type of string, A1, A2, B1, and B2 is string. The underlying type of []B1, B3, and B4 is []B1. 
+
+## Method sets
+A type may have a *method set* associated with it.
+The method set of an **interface type** is its interface. 
+The method set of any other type T consists of all methods declared with receiver type T. 
+The method set of the corresponding **pointer type \*T** is the set of all methods declared with receiver *T or T.
+
+## Boolean types
+```bool```, ```true``` and ```false```
+
+## Numeric types
+```
+uint8       the set of all unsigned  8-bit integers (0 to 255)
+uint16      the set of all unsigned 16-bit integers (0 to 65535)
+uint32      the set of all unsigned 32-bit integers (0 to 4294967295)
+uint64      the set of all unsigned 64-bit integers (0 to 18446744073709551615)
+
+int8        the set of all signed  8-bit integers (-128 to 127)
+int16       the set of all signed 16-bit integers (-32768 to 32767)
+int32       the set of all signed 32-bit integers (-2147483648 to 2147483647)
+int64       the set of all signed 64-bit integers (-9223372036854775808 to 9223372036854775807)
+
+float32     the set of all IEEE-754 32-bit floating-point numbers
+float64     the set of all IEEE-754 64-bit floating-point numbers
+
+complex64   the set of all complex numbers with float32 real and imaginary parts
+complex128  the set of all complex numbers with float64 real and imaginary parts
+
+byte        alias for uint8
+rune        alias for int32
+```
+
+The value of an n-bit integer is n bits wide and represented using two's complement arithmetic.
+
+There is also a set of predeclared numeric types with implementation-specific sizes:
+
+```
+uint     either 32 or 64 bits
+int      same size as uint
+uintptr  an unsigned integer large enough to store the uninterpreted bits of a pointer value
+```
+
+Conversions are required when different numeric types are mixed in an expression or assignment. For instance, int32 and int are **not** the same type even though they may have the same size on a particular architecture. 
+
+## String types
+A string type represents the set of string values. A string value is a (possibly empty) sequence of bytes. Strings are **immutable**.
+
+It is illegal to take the address of such an element; if s[i] is the i'th byte of a string, &s[i] is invalid. 
+
+## Array types
+```
+ArrayType   = "[" ArrayLength "]" ElementType .
+ArrayLength = Expression .
+ElementType = Type .
+```
+The length is part of the array's type; it must evaluate to a **non-negative constant representable** by a value of type **int**. 
+
+```
+[32]byte
+[2*N] struct { x, y int32 }
+[1000]*float64
+[3][5]int
+[2][2][2]float64  // same as [2]([2]([2]float64))
+```
+
+## Slice type
+```
+SliceType = "[" "]" ElementType.
+```
+A slice is a descriptor for a contiguous segment of an *underlying array* and provides access to a numbered sequence of elements from that array. A slice type denotes the set of all slices of arrays of its element type. The value of an uninitialized slice is nil.
+
+The array underlying a slice may extend past the end of the slice. The capacity is a measure of that extent: it is the sum of the length of the slice and the length of the array beyond the slice; a slice of length up to that capacity can be created by slicing a new one from the original slice. The capacity of a slice a can be discovered using the built-in function cap(a).
+
+A new, initialized slice value for a given element type T is made using the built-in function make, which takes a slice type and parameters specifying the length and optionally the capacity. A slice created with make always allocates a new, hidden array to which the returned slice value refers. That is, executing
+```
+make([]T, length, capacity)
+```
+produces the same slice as allocating an array and slicing it, so these two expressions are equivalent:
+```
+make([]int, 50, 100)
+new([100]int)[0:50]
+```
+
+## Struct types
+```
+StructType    = "struct" "{" { FieldDecl ";" } "}" .
+FieldDecl     = (IdentifierList Type | EmbeddedField) [ Tag ] .
+EmbeddedField = [ "*" ] TypeName .
+Tag           = string_lit .
+```
+```
+// An empty struct.
+struct {}
+
+// A struct with 6 fields.
+struct {
+	x, y int
+	u float32
+	_ float32  // padding
+	A *[]int
+	F func()
+}
+```
+
+**promoted**
+<br>
+...TODO: complete it...
+
+## Pointer types
+```
+PointerType = "*" BaseType .
+BaseType    = Type .
+```
+```
+*Point
+*[4]int
+```
+
+## Function types
+A function type denotes the set of **all functions with the same parameter and result types**. The value of an uninitialized variable of function type is nil. 
+```
+FunctionType   = "func" Signature .
+Signature      = Parameters [ Result ] .
+Result         = Parameters | Type .
+Parameters     = "(" [ ParameterList [ "," ] ] ")" .
+ParameterList  = ParameterDecl { "," ParameterDecl } .
+ParameterDecl  = [ IdentifierList ] [ "..." ] Type .
+```
+```
+func()
+func(x int) int
+func(a, _ int, z float32) bool
+func(a, b int, z float32) (bool)
+func(prefix string, values ...int)
+func(a, b int, z float64, opt ...interface{}) (success bool)
+func(int, int, float64) (float64, *[]int)
+func(n int) func(p *T)
+```
+## Interface types
+An interface type specifies a **method set** called its *interface*.
+
+A **variable** of interface type can store a value of **any type** with a method set that is any **superset** of the interface. 
+```
+InterfaceType      = "interface" "{" { MethodSpec ";" } "}" .
+MethodSpec         = MethodName Signature | InterfaceTypeName .
+MethodName         = identifier .
+InterfaceTypeName  = TypeName .
+```
+As with all method sets, in an interface type, each method must have a unique non-blank name.
+```
+// A simple File interface
+interface {
+	Read(b Buffer) bool
+	Write(b Buffer) bool
+	Close()
+}
+```
+
+```
+func (p T) Read(b Buffer) bool { return … }
+func (p T) Write(b Buffer) bool { return … }
+func (p T) Close() { … }
+```
+More than one type may implement an interface. For instance, if two types S1 and S2 have the method set (where T stands for either S1 or S2) then the File interface is implemented by both S1 and S2, regardless of what other methods S1 and S2 may have or share.
+
+A type implements any interface comprising any subset of its methods and may therefore implement several distinct interfaces. For instance, all types implement the empty interface: 
+```
+interface{}
+```
+
+*embedding* interface E in T, it adds all (exported and non-exported) methods of E to the interface T. 
+
+## Map types
+```
+MapType     = "map" "[" KeyType "]" ElementType .
+KeyType     = Type .
+ElementType = Type .
+```
+```
+map[string]int
+map[*T]struct{ x, y float64 }
+map[string]interface{}
+```
+
+```
+make(map[string]int)
+make(map[string]int, 100)
+```
+
+## Channel types
+```
+ChannelType = ( "chan" | "chan" "<-" | "<-" "chan" ) ElementType .
+```
+A channel may be constrained only to send or only to receive by conversion or assignment. 
+```
+chan T          // can be used to send and receive values of type T
+chan<- float64  // can only be used to send float64s
+<-chan int      // can only be used to receive ints
+```
+A new, initialized channel value can be made using the built-in function make, which takes the channel type and an optional capacity as arguments:
+```
+make(chan int, 100)
+```
+
+# Properties of types and values
 
 # Blocks
 ```
