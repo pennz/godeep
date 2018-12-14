@@ -4,58 +4,50 @@ import (
 	"testing"
 )
 
-func TestMALG_UpdateJ(t *testing.T) {
-	type fields struct {
-		w1 float64
-		w2 float64
-		f1 float64
-		f2 float64
-		f3 float64
-	}
+func Test_main(t *testing.T) {
 	tests := []struct {
-		name   string
-		fields fields
+		name string
 	}{
 		// TODO: Add test cases.
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			m := &MALG{
-				w1: tt.fields.w1,
-				w2: tt.fields.w2,
-				f1: tt.fields.f1,
-				f2: tt.fields.f2,
-				f3: tt.fields.f3,
-			}
-			m.UpdateJ()
+			main()
 		})
 	}
 }
 
-func TestMALG_UpdateWeight(t *testing.T) {
+func TestMALG_Calculate(t *testing.T) {
 	type fields struct {
-		w1 float64
-		w2 float64
-		f1 float64
-		f2 float64
-		f3 float64
+		J11        float64
+		J21        float64
+		J22        float64
+		J12        float64
+		R1         float64
+		R2         float64
+		_MALGModel _MALGModel
 	}
 	tests := []struct {
 		name   string
 		fields fields
+		want   float64
 	}{
 		// TODO: Add test cases.
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			m := &MALG{
-				w1: tt.fields.w1,
-				w2: tt.fields.w2,
-				f1: tt.fields.f1,
-				f2: tt.fields.f2,
-				f3: tt.fields.f3,
+				J11:        tt.fields.J11,
+				J21:        tt.fields.J21,
+				J22:        tt.fields.J22,
+				J12:        tt.fields.J12,
+				R1:         tt.fields.R1,
+				R2:         tt.fields.R2,
+				_MALGModel: tt.fields._MALGModel,
 			}
-			m.UpdateWeight()
+			if got := m.Calculate(); got != tt.want {
+				t.Errorf("MALG.Calculate() = %v, want %v", got, tt.want)
+			}
 		})
 	}
 }
